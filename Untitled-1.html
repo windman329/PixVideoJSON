@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Видео в JSON конвертер</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <style>
+        /* Ваши существующие стили остаются без изменений */
+        :root {
+            --bg-dark: #121212;
+            --bg-darker: #0a0a0a;
+            --text-light: #e0e0e0;
+            --accent-color: #2a82da;
+            --border-color: #333;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        h1 {
+            color: var(--accent-color);
+            margin-bottom: 10px;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        
+        @media (min-width: 768px) {
+            .container {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        
+        .card {
+            background-color: var(--bg-darker);
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card h2 {
+            margin-bottom: 15px;
+            color: var(--accent-color);
+            font-size: 1.3rem;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            background: #1a1a1a;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-light);
+        }
+        
+        input[type="number"], input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            background: #1a1a1a;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-light);
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .checkbox-group input {
+            margin-right: 10px;
+        }
+        
+        button {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.3s;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            background-color: #1a6bb3;
+        }
+        
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        
+        .progress-container {
+            margin: 20px 0;
+        }
+        
+        progress {
+            width: 100%;
+            height: 25px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        progress::-webkit-progress-bar {
+            background-color: #1a1a1a;
+            border-radius: 4px;
+        }
+        
+        progress::-webkit-progress-value {
+            background-color: var(--accent-color);
+            border-radius: 4px;
+        }
+        
+        progress::-moz-progress-bar {
+            background-color: var(--accent-color);
+            border-radius: 4px;
+        }
+        
+        .info-box {
+            background-color: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid var(--accent-color);
+            margin-top: 20px;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            text-align: center;
+        }
+        
+        .status-success {
+            background-color: #1a3c1a;
+            border: 1px solid #2e7d32;
+        }
+        
+        .status-error {
+            background-color: #3c1a1a;
+            border: 1px solid #7d322e;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .preview-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        #framePreview {
+            max-width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+        
+        .dimension-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Конвертер видео в JSON</h1>
+        <p>Конвертируйте видео в сжатый JSON формат для использования в веб-приложениях</p>
+    </header>
+    
+    <div class="container">
+        <div class="card">
+            <h2>Настройки видео</h2>
+            
+            <div class="form-group">
+                <label for="videoFile">Выберите видеофайл:</label>
+                <input type="file" id="videoFile" accept="video/*">
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="resize" checked>
+                <label for="resize">Изменять размер видео</label>
+            </div>
+            
+            <div class="dimension-inputs">
+                <div class="form-group">
+                    <label for="width">Ширина (px):</label>
+                    <input type="number" id="width" min="1" max="1920" value="160">
+                </div>
+                
+                <div class="form-group">
+                    <label for="height">Высота (px):</label>
+                    <input type="number" id="height" min="1" max="1080" value="88">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="quant">Квантование цветов (1-256):</label>
+                <input type="number" id="quant" min="1" max="256" value="64">
+            </div>
+            
+            <div class="form-group">
+                <label for="fps">Частота кадров (FPS):</label>
+                <input type="number" id="fps" min="1" max="60" value="15">
+            </div>
+            
+            <button id="startBtn">Запустить обработку</button>
+            
+            <div class="progress-container">
+                <progress id="progressBar" value="0" max="100"></progress>
+                <div id="progressLabel">Прогресс: 0%</div>
+            </div>
+            
+            <div class="info-box">
+                <div id="infoLabel">Ожидание обработки...</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Результат</h2>
+            
+            <div class="preview-container">
+                <canvas id="framePreview"></canvas>
+            </div>
+            
+            <div class="info-box">
+                <div>После завершения обработки файл будет автоматически скачан</div>
+            </div>
+            
+            <div id="resultInfo" class="info-box">
+                <div>Информация о результате появится здесь</div>
+            </div>
+            
+            <button id="downloadBtn" class="hidden" disabled>Скачать JSON</button>
+        </div>
+    </div>
+    
+    <script>
+        // Код для Web Worker
+        const workerCode = `
+            // Конвертация RGB в HEX
+            function rgbToHex(rgb) {
+                return \`\${rgb[0].toString(16).padStart(2, '0')}\${rgb[1].toString(16).padStart(2, '0')}\${rgb[2].toString(16).padStart(2, '0')}\`;
+            }
+
+            // Квантование цветов
+            function quantizeColors(rgbFrame, div = 64) {
+                return rgbFrame.map(component => Math.floor(component / div) * div);
+            }
+
+            // Обработка кадра
+            function processFrame(imageData, quantDiv, paletteMap, palette) {
+                const width = imageData.width;
+                const height = imageData.height;
+                const frameIndexed = [];
+                for (let y = 0; y < height; y++) {
+                    const row = [];
+                    for (let x = 0; x < width; x++) {
+                        const idx = (y * width + x) * 4;
+                        const r = imageData.data[idx];
+                        const g = imageData.data[idx + 1];
+                        const b = imageData.data[idx + 2];
+                        
+                        // Квантование цвета
+                        const quantized = quantizeColors([r, g, b], quantDiv);
+                        const hexColor = rgbToHex(quantized);
+                        
+                        // Добавляем в палитру
+                        if (!paletteMap[hexColor]) {
+                            paletteMap[hexColor] = palette.length;
+                            palette.push(hexColor);
+                        }
+                        
+                        row.push(paletteMap[hexColor]);
+                    }
+                    frameIndexed.push(row);
+                }
+                return frameIndexed;
+            }
+
+            self.onmessage = function(e) {
+                try {
+                    self.postMessage({ debug: "worker started" });
+                    const { imageData, quantDiv, frameIndex, paletteMap, palette } = e.data;
+                    const frameIndexed = processFrame(imageData, quantDiv, paletteMap, palette);
+                    self.postMessage({
+                        frameIndexed,
+                        frameIndex,
+                        paletteMap,
+                        palette
+                    });
+                } catch (err) {
+                    self.postMessage({ debug: "worker error: " + err.message });
+                }
+            };
+        `;
+
+        // Создаем Blob URL для Worker
+        const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(workerBlob);
+
+        // Обновление прогресса
+        function updateProgress(percent, current, total) {
+            document.getElementById('progressBar').value = percent;
+            document.getElementById('progressLabel').textContent = 
+                `Прогресс: ${percent}% (${current}/${total} кадров)`;
+        }
+
+        // Показ информации
+        function showInfo(message, isError = false) {
+            const infoLabel = document.getElementById('infoLabel');
+            infoLabel.textContent = message;
+            infoLabel.className = isError ? 'status-error' : '';
+        }
+
+        // Обработка видео с использованием Web Workers
+        async function processVideo() {
+            console.log("processVideo started");
+            const videoFile = document.getElementById('videoFile').files[0];
+            if (!videoFile) {
+                showInfo('Пожалуйста, выберите видео файл', true);
+                return;
+            }
+
+            const resize = document.getElementById('resize').checked;
+            const width = resize ? parseInt(document.getElementById('width').value) : null;
+            const height = resize ? parseInt(document.getElementById('height').value) : null;
+            const quantDiv = parseInt(document.getElementById('quant').value);
+            const fps = parseInt(document.getElementById('fps').value);
+
+            showInfo('Подготовка видео...');
+            updateProgress(0, 0, 0);
+
+            try {
+                // Создаем видео элемент
+                const video = document.createElement('video');
+                video.muted = true;
+                video.src = URL.createObjectURL(videoFile);
+                
+                // Ожидаем загрузки метаданных
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = resolve;
+                });
+                
+                // Определяем размеры
+                let targetWidth = width || video.videoWidth;
+                let targetHeight = height || video.videoHeight;
+                
+                // Создаем canvas для обработки кадров
+                const canvas = document.createElement('canvas');
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+                const ctx = canvas.getContext('2d');
+                
+                // Создаем canvas для превью
+                const previewCanvas = document.getElementById('framePreview');
+                previewCanvas.width = targetWidth;
+                previewCanvas.height = targetHeight;
+                const previewCtx = previewCanvas.getContext('2d');
+                
+                // Инициализация структур данных
+                const palette = [];
+                const paletteMap = {};
+                const allFramesIndexed = [];
+                
+                let processedFrames = 0;
+                let frameCounter = 0;
+                const totalFrames = Math.floor(video.duration * fps);
+                
+                showInfo('Обработка видео...');
+                
+                // Количество воркеров = количество ядер CPU или минимум 4
+                const workerCount = Math.max(4, navigator.hardwareConcurrency || 4);
+                const workers = [];
+                for (let i = 0; i < workerCount; i++) {
+                    try {
+                        workers.push({ worker: new Worker(workerUrl), busy: false });
+                        console.log("Worker", i, "created");
+                    } catch (e) {
+                        console.error("Worker creation failed", e);
+                    }
+                }
+
+                // Функция для поиска свободного воркера
+                function getFreeWorker() {
+                    return workers.find(w => !w.busy);
+                }
+
+                async function processNextFrame() {
+                    console.log("processNextFrame", frameCounter, totalFrames);
+                    if (frameCounter >= totalFrames) {
+                        // Ждём завершения всех воркеров
+                        while (workers.some(w => w.busy)) {
+                            await new Promise(r => setTimeout(r, 10));
+                        }
+                        finishProcessing(allFramesIndexed, palette, targetWidth, targetHeight, fps);
+                        workers.forEach(w => w.worker.terminate());
+                        return;
+                    }
+
+                    // Ждём свободного воркера
+                    let freeWorker;
+                    while (!(freeWorker = getFreeWorker())) {
+                        await new Promise(r => setTimeout(r, 1));
+                    }
+                    freeWorker.busy = true;
+
+                    video.currentTime = frameCounter / fps;
+                    await new Promise(resolve => video.onseeked = resolve);
+
+                    ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+                    const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+
+                    if (frameCounter % 10 === 0) {
+                        previewCtx.putImageData(imageData, 0, 0);
+                    }
+
+                    // Вместо ImageData создаём простой объект
+                    const imageDataCopy = {
+                        data: new Uint8ClampedArray(imageData.data),
+                        width: imageData.width,
+                        height: imageData.height
+                    };
+
+                    const currentFrame = frameCounter;
+                    frameCounter++;
+
+                    freeWorker.worker.onmessage = function(e) {
+                        if (e.data && e.data.debug) {
+                            console.log("Worker debug:", e.data.debug);
+                            return;
+                        }
+                        const { frameIndexed, frameIndex, paletteMap: updatedPaletteMap, palette: updatedPalette } = e.data;
+                        Object.assign(paletteMap, updatedPaletteMap);
+                        palette.length = 0;
+                        if (Array.isArray(updatedPalette)) {
+                            palette.push.apply(palette, updatedPalette);
+                        }
+                        allFramesIndexed[frameIndex] = frameIndexed;
+                        processedFrames++;
+                        const percent = Math.floor((processedFrames / totalFrames) * 100);
+                        updateProgress(percent, processedFrames, totalFrames);
+                        freeWorker.busy = false;
+                        console.log("Frame processed", frameIndex);
+                    };
+
+                    freeWorker.worker.postMessage({
+                        imageData: imageDataCopy,
+                        quantDiv: quantDiv,
+                        frameIndex: currentFrame,
+                        paletteMap: {...paletteMap},
+                        palette: [...palette]
+                    }, [imageDataCopy.data.buffer]);
+
+                    // Запускаем обработку следующего кадра
+                    processNextFrame();
+                }
+
+                processNextFrame();
+            } catch (error) {
+                showInfo(`Ошибка: ${error.message}`, true);
+                console.error("processVideo error", error);
+            }
+        }
+
+        // Завершение обработки
+        function finishProcessing(allFramesIndexed, palette, width, height, fps) {
+            showInfo('Завершение обработки...');
+            
+            try {
+                // Кодирование в RLE
+                let binaryData = new Uint8Array(width * height * allFramesIndexed.length * 2);
+                let offset = 0;
+                
+                for (const frame of allFramesIndexed) {
+                    const flat = frame.flat();
+                    let i = 0;
+                    
+                    while (i < flat.length) {
+                        const color = flat[i];
+                        let count = 1;
+                        
+                        while (i + count < flat.length && 
+                               flat[i + count] === color && 
+                               count < 255) {
+                            count++;
+                        }
+                        
+                        binaryData[offset++] = color;
+                        binaryData[offset++] = count;
+                        i += count;
+                    }
+                }
+                
+                binaryData = binaryData.slice(0, offset);
+                
+                // Сжатие
+                const compressed = pako.deflate(binaryData, { level: 9 });
+                // Безопасное преобразование большого массива в строку
+                let binaryString = '';
+                for (let i = 0; i < compressed.length; i += 0x8000) {
+                    binaryString += String.fromCharCode.apply(null, compressed.subarray(i, i + 0x8000));
+                }
+                const framesCompressed = btoa(binaryString);
+                
+                // Формирование результата
+                const result = {
+                    width: width,
+                    height: height,
+                    frameRate: fps,
+                    frameCount: allFramesIndexed.length,
+                    palette: palette,
+                    compression: "binary_rle_zlib",
+                    frames: framesCompressed
+                };
+                
+                // Создание JSON
+                const jsonResult = JSON.stringify(result);
+                const blob = new Blob([jsonResult], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                // Скачивание
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'video_converted.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // Обновление информации
+                const sizeMB = (jsonResult.length / (1024 * 1024)).toFixed(2);
+                document.getElementById('resultInfo').innerHTML = `
+                    <h3>Результат обработки</h3>
+                    <p>Размеры: ${width}×${height} пикселей</p>
+                    <p>Кадров: ${allFramesIndexed.length}</p>
+                    <p>Цветов: ${palette.length}</p>
+                    <p>Размер файла: ${sizeMB} MB</p>
+                `;
+                
+                showInfo('Обработка завершена! Файл скачан.');
+                document.getElementById('downloadBtn').classList.remove('hidden');
+            } catch (error) {
+                showInfo(`Ошибка при завершении: ${error.message}`, true);
+                console.error(error);
+            }
+        }
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            // Обработка изменения размера
+            document.getElementById('resize').addEventListener('change', function() {
+                const dimensionInputs = document.querySelector('.dimension-inputs');
+                dimensionInputs.style.display = this.checked ? 'grid' : 'none';
+            });
+            
+            // Запуск обработки
+            document.getElementById('startBtn').addEventListener('click', processVideo);
+            
+            // Кнопка скачивания
+            document.getElementById('downloadBtn').addEventListener('click', () => {
+                // Повторное скачивание можно реализовать при необходимости
+            });
+        });
+    </script>
+</body>
+</html>
